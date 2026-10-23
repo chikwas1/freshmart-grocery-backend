@@ -49,3 +49,38 @@ exports.deleteProduct = async (req, res) => {
   if (!product) return ApiResponse.error(res, 'Product not found', 404);
   ApiResponse.success(res, 'Product deleted successfully');
 };
+
+// Helper snippet for bounded pagination
+const getPaginationParams = (query) => {
+  const parsedPage = Number.parseInt(query.page, 10);
+  const parsedLimit = Number.parseInt(query.limit, 10);
+
+  const page = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const limit = Number.isInteger(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 10; // Max 100 per page
+  const skip = (page - 1) * limit;
+
+  return { page, limit, skip };
+};
+
+// Usage inside a controller:
+exports.getAllProducts = async (req, res, next) => {
+  try {
+    const { page, limit, skip } = getPaginationParams(req.query);
+
+    const products = await Product.find().skip(skip).limit(limit);
+    const total = await Product.countDocuments();
+
+    return res.status(200).json({
+      success: true,
+      meta: {
+        total,
+        page,
+        pages: Math.ceil(total / limit),
+        limit
+      },
+      data: products
+    });
+  } catch (error) {
+    next(error);
+  }
+};

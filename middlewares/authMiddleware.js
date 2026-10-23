@@ -1,46 +1,39 @@
+// src/middlewares/authMiddleware.js
 const jwt = require('jsonwebtoken');
-const User = require('../models/user');
-const ApiResponse = require('../utils/apiResponse');
-
-// Cache token blacklist for in-memory logout tracking
-const tokenBlacklist = new Set();
+const User = require('../models/User'); // Ensure exact filename match (User.js)
 
 const authenticate = async (req, res, next) => {
-  let token;
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-    token = req.headers.authorization.split(' ')[1];
-  }
-
-  if (!token) {
-    return ApiResponse.error(res, 'Authentication token missing', 401);
-  }
-
-  if (tokenBlacklist.has(token)) {
-    return ApiResponse.error(res, 'Token is invalidated/logged out', 401);
-  }
-
   try {
+    let token;
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+      token = req.headers.authorization.split(' ')[1];
+    }
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'Not authorized, token missing' });
+    }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.id).select('-password');
+    
     if (!user) {
-      return ApiResponse.error(res, 'User no longer exists', 401);
+      return res.status(401).json({ success: false, message: 'User no longer exists' });
     }
 
     req.user = user;
-    req.token = token;
     next();
   } catch (error) {
-    return ApiResponse.error(res, 'Invalid or expired token', 401);
+    return res.status(401).json({ success: false, message: 'Not authorized, token failed' });
   }
 };
 
 const authorize = (...roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {
-      return ApiResponse.error(res, 'Forbidden: Insufficient privileges', 403);
+      return res.status(403).json({ success: false, message: 'Forbidden: Insufficient privileges' });
     }
     next();
   };
 };
 
-module.exports = { authenticate, authorize, tokenBlacklist };
+module.exports = { authenticate, authorize };
